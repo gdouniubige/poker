@@ -30,7 +30,12 @@ export const useGameStore = defineStore('game', () => {
   const error = ref('')
   const connected = ref(false)
   const showResult = ref(false)
-  const gameOver = ref<{ name: string; chips: number } | null>(null)
+
+  const isGameOver = computed(() => {
+    if (!gameState.value || !showResult.value) return false
+    const alive = gameState.value.players.filter(p => p.chips > 0)
+    return alive.length <= 1
+  })
 
   let host: GameHost | null = null
   let client: GameClient | null = null
@@ -70,10 +75,6 @@ export const useGameStore = defineStore('game', () => {
       onGameStateChange(state: any) {
         gameState.value = serializeGameState(state, 'host-self')
         if (state.winners) showResult.value = true
-      },
-      onGameOver(winner: { id: string; name: string; chips: number }) {
-        gameOver.value = { name: winner.name, chips: winner.chips }
-        showResult.value = true
       },
     })
     saveSession({ role: 'host', roomCode: code, playerName: name, initialChips })
@@ -128,27 +129,25 @@ export const useGameStore = defineStore('game', () => {
     else client?.sendAction(action)
   }
 
-  function nextHand() {
-    showResult.value = false
-    gameOver.value = null
-    if (host) host.hostNextHand()
+  function setReady() {
+    if (host) host.hostReady()
+    else client?.sendReady()
   }
 
-  function dismissResult() { showResult.value = false; gameOver.value = null }
+  function dismissResult() { showResult.value = false }
 
   function cleanup() {
     host?.destroy(); client?.destroy()
     host = null; client = null
     role.value = 'none'; gameState.value = null
     lobbyPlayers.value = []; connected.value = false; showResult.value = false
-    gameOver.value = null
     clearSession()
   }
 
   return {
     role, roomCode, playerName, gameState, lobbyPlayers, error, connected,
-    showResult, gameOver, isMyTurn, myPlayer, canCheck, callAmount,
+    showResult, isGameOver, isMyTurn, myPlayer, canCheck, callAmount,
     createRoom, joinRoom, restoreSession, startGame, performAction,
-    nextHand, dismissResult, cleanup,
+    setReady, dismissResult, cleanup,
   }
 })

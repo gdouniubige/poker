@@ -75,6 +75,7 @@ export class GameClient {
   send(msg: ClientMessage) { if (this.conn?.open) this.conn.send(msg) }
   sendAction(action: PlayerAction) { this.send({ type: 'action', action }) }
   requestStart() { this.send({ type: 'start_game' }) }
+  sendReady() { this.send({ type: 'ready' }) }
 
   leave() { this.send({ type: 'leave' }); this.conn?.close(); this.peer?.destroy() }
   destroy() { this.leave() }

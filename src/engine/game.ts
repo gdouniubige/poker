@@ -40,7 +40,7 @@ export function createInitialState(config: GameConfig = DEFAULT_CONFIG): GameSta
     currentBet: 0, minRaise: 1,
     initialChips: config.initialChips, roundCount: 0,
     actedMask: 0, deck: [],
-    winners: null, showdown: null,
+    readyPlayers: [], winners: null, showdown: null,
   }
 }
 
@@ -70,7 +70,7 @@ export function startHand(state: GameState): boolean {
 
   state.communityCards = []; state.pot = 0; state.sidePots = []
   state.currentBet = state.bigBlind; state.minRaise = 1
-  state.actedMask = 0; state.winners = null; state.showdown = null
+  state.actedMask = 0; state.readyPlayers = []; state.winners = null; state.showdown = null
 
   for (const p of state.players) {
     p.bet = 0; p.totalBet = 0; p.holeCards = [null, null]
@@ -283,7 +283,7 @@ export function resetForNextHand(state: GameState) {
   state.phase = GamePhase.Waiting; state.communityCards = []
   state.currentBet = 0; state.sidePots = []; state.pot = 0
   state.winners = null; state.showdown = null
-  state.actedMask = 0
+  state.actedMask = 0; state.readyPlayers = []
   for (const p of state.players) {
     p.bet = 0; p.totalBet = 0
     if (p.chips > 0) { p.folded = false; p.allIn = false }
