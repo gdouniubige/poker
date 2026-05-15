@@ -62,7 +62,7 @@
     </div>
 
     <!-- Hand result modal -->
-    <div v-if="store.showResult && !store.isGameOver && store.gameState.winners" class="modal-overlay">
+    <div v-if="store.showResult && !store.gameOver && store.gameState.winners" class="modal-overlay" @click.self="store.nextHand()">
       <div class="result-modal">
         <h3 class="result-title">结算</h3>
 
@@ -88,46 +88,22 @@
               <span class="wa">+{{ w.amount }}分</span>
             </div>
           </div>
-
-          <!-- Ready status per player -->
-          <div class="ready-section">
-            <div v-for="p in alivePlayers" :key="p.id" class="ready-row">
-              <span class="ready-name">{{ p.name }}</span>
-              <span v-if="isReady(p.id)" class="ready-ok">已准备</span>
-              <span v-else class="ready-wait">等待中</span>
-            </div>
-          </div>
         </div>
 
         <div class="result-footer">
-          <button v-if="!isSelfReady && isSelfAlive" class="btn next" @click="store.setReady()">准备</button>
-          <span v-else-if="isSelfReady" class="ready-done">已准备，等待其他人...</span>
-          <span v-else class="auto-text">你已被淘汰</span>
+          <button v-if="store.role === 'host'" class="btn next" @click="store.nextHand()">下一局</button>
+          <p v-else class="auto-text">等待房主开始下一局</p>
         </div>
       </div>
     </div>
 
-    <!-- Game over / rematch modal -->
-    <div v-if="store.showResult && store.isGameOver" class="modal-overlay">
+    <!-- Game over modal -->
+    <div v-if="store.showResult && store.gameOver" class="modal-overlay">
       <div class="result-modal">
-        <h3 class="result-title">游戏结束</h3>
-        <div class="result-scroll">
-          <p class="champion">{{ championName }} 赢下全部!</p>
-          <p class="champion-chips">{{ championChips }} 分</p>
-
-          <div class="ready-section">
-            <div v-for="p in allPlayers" :key="p.id" class="ready-row">
-              <span class="ready-name">{{ p.name }}</span>
-              <span v-if="isReady(p.id)" class="ready-ok">已准备</span>
-              <span v-else class="ready-wait">等待中</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="result-footer">
-          <button v-if="!isSelfReady" class="btn next" @click="store.setReady()">再来一局</button>
-          <span v-else class="ready-done">已准备，等待其他人...</span>
-        </div>
+        <h3>游戏结束</h3>
+        <p class="champion">{{ store.gameOver.name }} 赢下全部!</p>
+        <p class="champion-chips">{{ store.gameOver.chips }} 分</p>
+        <button class="btn next" @click="doLeave">返回首页</button>
       </div>
     </div>
   </div>
@@ -167,31 +143,6 @@ const otherPlayers = computed(() => {
 
 const myCards = computed(() => store.gameState?.yourCards || [])
 
-const allPlayers = computed(() => store.gameState?.players || [])
-
-const alivePlayers = computed(() => allPlayers.value.filter(p => p.chips > 0))
-
-const selfId = computed(() => store.role === 'host' ? 'host-self' : store.gameState?.yourId || '')
-
-const isSelfAlive = computed(() => {
-  const me = allPlayers.value.find(p => p.id === selfId.value)
-  return me ? me.chips > 0 : false
-})
-
-const isSelfReady = computed(() => {
-  return store.gameState?.readyPlayers?.includes(selfId.value) ?? false
-})
-
-const championName = computed(() => {
-  const winner = allPlayers.value.find(p => p.chips > 0)
-  return winner?.name || ''
-})
-
-const championChips = computed(() => {
-  const winner = allPlayers.value.find(p => p.chips > 0)
-  return winner?.chips ?? 0
-})
-
 const currentPlayerName = computed(() => {
   if (!store.gameState) return ''
   const idx = store.gameState.currentPlayerIndex
@@ -207,10 +158,6 @@ function getPlayerIndex(id: string): number {
 
 function isWinner(playerId: string): boolean {
   return store.gameState?.winners?.some(w => w.playerId === playerId) ?? false
-}
-
-function isReady(playerId: string): boolean {
-  return store.gameState?.readyPlayers?.includes(playerId) ?? false
 }
 
 // ─── Sound effects ───
@@ -303,12 +250,6 @@ watch(() => store.gameState?.phase, (p) => {
 .wa { color: #4caf50; font-weight: 600; }
 .btn.next { padding: 12px; border-radius: 8px; background: #4caf50; color: #fff; font-weight: 600; font-size: 16px; width: 100%; }
 .auto-text { color: #aaa; font-size: 13px; }
-.ready-done { color: #4caf50; font-size: 14px; font-weight: 600; }
-.ready-section { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; margin-top: 4px; }
-.ready-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
-.ready-name { color: #ccc; }
-.ready-ok { color: #4caf50; font-weight: 600; }
-.ready-wait { color: #666; }
 .champion { font-size: 18px; font-weight: 600; }
 .champion-chips { font-size: 24px; color: #ffd54f; font-weight: bold; }
 .util-bar { display: flex; gap: 8px; justify-content: center; padding: 4px; }

@@ -11,7 +11,6 @@ export type ClientMessage =
   | { type: 'action'; action: PlayerAction }
   | { type: 'leave' }
   | { type: 'start_game' }
-  | { type: 'ready' }
 
 export interface SerializedGameState {
   phase: string
@@ -21,7 +20,7 @@ export interface SerializedGameState {
   currentPlayerIndex: number; dealerIndex: number
   sbIndex: number; bbIndex: number
   smallBlind: number; bigBlind: number; currentBet: number; minRaise: number
-  initialChips: number; roundCount: number; readyPlayers: string[]
+  initialChips: number; roundCount: number
   winners: { playerId: string; playerName: string; amount: number; handRank: number; handName: string; cards: string[] }[] | null
   showdown: { playerId: string; playerName: string; holeCards: [string, string]; cards: string[]; handName: string; handRank: number }[] | null
   yourCards?: [string, string]; yourId?: string
@@ -41,9 +40,7 @@ export function serializeGameState(state: GameState, forPlayerId?: string): Seri
     smallBlind: state.smallBlind, bigBlind: state.bigBlind,
     currentBet: state.currentBet, minRaise: state.minRaise,
     initialChips: state.initialChips,
-    roundCount: state.roundCount,
-    readyPlayers: state.readyPlayers,
-    winners: state.winners, showdown: state.showdown,
+    roundCount: state.roundCount, winners: state.winners, showdown: state.showdown,
     yourCards: forPlayerId ? (() => {
       const you = state.players.find(p => p.id === forPlayerId)
       if (!you || !you.holeCards[0]) return undefined

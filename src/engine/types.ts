@@ -50,7 +50,6 @@ export interface GameState {
   initialChips: number; roundCount: number
   actedMask: number
   deck: Card[]
-  readyPlayers: string[]
   winners: WinnerInfo[] | null
   showdown: ShowdownInfo[] | null
 }
@@ -58,7 +57,6 @@ export interface GameState {
 export type PlayerAction =
   | { type: 'fold' } | { type: 'check' } | { type: 'call' }
   | { type: 'raise'; amount: number } | { type: 'all_in' }
-  | { type: 'ready' }
 
 export interface GameConfig {
   smallBlind: number; bigBlind: number; initialChips: number; maxPlayers: number
