@@ -22,26 +22,36 @@ export enum GamePhase {
 }
 
 export interface PlayerState {
-  id: string; name: string; chips: number; bet: number
+  id: string; name: string; chips: number; bet: number; totalBet: number
   holeCards: [Card | null, Card | null]
   folded: boolean; allIn: boolean; seatIndex: number; isHost: boolean
 }
 
 export interface SidePot { amount: number; eligiblePlayerIds: string[] }
 
+export interface WinnerInfo {
+  playerId: string; playerName: string; amount: number
+  handRank: HandRank; handName: string
+  cards: string[]
+}
+
+export interface ShowdownInfo {
+  playerId: string; playerName: string
+  holeCards: [string, string]; cards: string[]; handName: string; handRank: HandRank
+}
+
 export interface GameState {
   phase: GamePhase; players: PlayerState[]
   communityCards: Card[]; pot: number; sidePots: SidePot[]
   currentPlayerIndex: number; dealerIndex: number
+  sbIndex: number; bbIndex: number
   smallBlind: number; bigBlind: number
   currentBet: number; minRaise: number
   initialChips: number; roundCount: number
+  actedMask: number
+  deck: Card[]
   winners: WinnerInfo[] | null
-}
-
-export interface WinnerInfo {
-  playerId: string; playerName: string; amount: number
-  handRank: HandRank; handName: string
+  showdown: ShowdownInfo[] | null
 }
 
 export type PlayerAction =
@@ -53,7 +63,7 @@ export interface GameConfig {
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
-  smallBlind: 1, bigBlind: 2, initialChips: 1000, maxPlayers: 9,
+  smallBlind: 1, bigBlind: 2, initialChips: 100, maxPlayers: 9,
 }
 
 export const HAND_NAMES: Record<HandRank, string> = {

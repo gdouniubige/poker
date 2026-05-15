@@ -1,9 +1,9 @@
 import {
   GameState, GamePhase, PlayerAction, Card,
-  GameConfig, DEFAULT_CONFIG, WinnerInfo, HAND_NAMES,
+  GameConfig, DEFAULT_CONFIG, WinnerInfo, HAND_NAMES, ShowdownInfo,
 } from './types'
-import { createDeck, shuffleDeck, dealCards } from './deck'
-import { bestHand, compareHands } from './hand'
+import { createDeck, shuffleDeck, dealCards, cardToString } from './deck'
+import { bestHand, bestHandWithCards, compareHands } from './hand'
 import { calculatePots } from './pot'
 
 function nextActive(state: GameState, from: number): number {
@@ -35,16 +35,19 @@ export function createInitialState(config: GameConfig = DEFAULT_CONFIG): GameSta
   return {
     phase: GamePhase.Waiting, players: [], communityCards: [],
     pot: 0, sidePots: [], currentPlayerIndex: 0, dealerIndex: 0,
+    sbIndex: -1, bbIndex: -1,
     smallBlind: config.smallBlind, bigBlind: config.bigBlind,
-    currentBet: 0, minRaise: config.bigBlind,
-    initialChips: config.initialChips, roundCount: 0, winners: null,
+    currentBet: 0, minRaise: 1,
+    initialChips: config.initialChips, roundCount: 0,
+    actedMask: 0, deck: [],
+    winners: null, showdown: null,
   }
 }
 
 export function addPlayer(state: GameState, id: string, name: string, isHost: boolean): boolean {
   if (state.players.length >= 9) return false
   state.players.push({
-    id, name, chips: state.initialChips, bet: 0,
+    id, name, chips: state.initialChips, bet: 0, totalBet: 0,
     holeCards: [null, null], folded: false, allIn: false,
     seatIndex: state.players.length, isHost,
   })
@@ -66,11 +69,11 @@ export function startHand(state: GameState): boolean {
   if (eligible.length < 2) return false
 
   state.communityCards = []; state.pot = 0; state.sidePots = []
-  state.currentBet = state.bigBlind; state.minRaise = state.bigBlind
-  state.winners = null
+  state.currentBet = state.bigBlind; state.minRaise = 1
+  state.actedMask = 0; state.winners = null; state.showdown = null
 
   for (const p of state.players) {
-    p.bet = 0; p.holeCards = [null, null]
+    p.bet = 0; p.totalBet = 0; p.holeCards = [null, null]
     p.folded = p.chips <= 0; p.allIn = false
   }
 
@@ -84,9 +87,11 @@ export function startHand(state: GameState): boolean {
   for (const p of state.players) {
     if (!p.folded) p.holeCards = [dealCards(deck, 1)[0], dealCards(deck, 1)[0]]
   }
+  state.deck = deck  // save remaining deck for community cards
 
   const sb = nextActive(state, state.dealerIndex)
   const bb = sb >= 0 ? nextActive(state, sb) : -1
+  state.sbIndex = sb; state.bbIndex = bb
   postBlind(state, sb, state.smallBlind)
   postBlind(state, bb, state.bigBlind)
 
@@ -99,6 +104,9 @@ export function startHand(state: GameState): boolean {
 export function processAction(state: GameState, playerIndex: number, action: PlayerAction): boolean {
   if (playerIndex !== state.currentPlayerIndex) return false
   const p = state.players[playerIndex]
+
+  // Mark player as acted in this round
+  state.actedMask |= (1 << playerIndex)
 
   switch (action.type) {
     case 'fold':
@@ -117,22 +125,35 @@ export function processAction(state: GameState, playerIndex: number, action: Pla
       const raiseAmt = Math.min(action.amount, p.chips - toCall)
       if (raiseAmt < state.minRaise && p.chips > toCall + state.minRaise) return false
       p.chips -= toCall + raiseAmt; p.bet += toCall + raiseAmt
-      state.currentBet = p.bet; state.minRaise = raiseAmt
+      state.currentBet = p.bet
+      // Raise re-opens action — everyone else must act again
+      state.actedMask = 1 << playerIndex
       if (p.chips === 0) p.allIn = true
       break
     }
     case 'all_in': {
+      const prevBet = state.currentBet
       const allInAmt = p.chips
       p.chips = 0; p.bet += allInAmt; p.allIn = true
-      if (p.bet > state.currentBet) {
-        state.minRaise = Math.max(state.minRaise, p.bet - state.currentBet)
+      if (p.bet > prevBet) {
         state.currentBet = p.bet
+        // All-in raise re-opens action
+        state.actedMask = 1 << playerIndex
       }
       break
     }
   }
 
   advanceGame(state)
+  return true
+}
+
+function allActed(state: GameState): boolean {
+  for (let i = 0; i < state.players.length; i++) {
+    const p = state.players[i]
+    if (p.folded || p.allIn) continue
+    if (!(state.actedMask & (1 << i))) return false
+  }
   return true
 }
 
@@ -144,22 +165,26 @@ function advanceGame(state: GameState) {
     .filter(p => !p.folded && !p.allIn)
     .every(p => p.bet === state.currentBet)
 
-  if (allMatched) {
-    for (const p of state.players) p.bet = 0
+  if (allMatched && allActed(state)) {
+    // Collect bets into pot and accumulate totalBet before resetting
+    state.pot += state.players.reduce((s, p) => s + p.bet, 0)
+    for (const p of state.players) { p.totalBet += p.bet; p.bet = 0 }
     state.currentBet = 0
+    state.minRaise = 1
+    state.actedMask = 0
 
     switch (state.phase) {
       case GamePhase.Preflop:
         state.phase = GamePhase.Flop
-        state.communityCards.push(...dealCards(shuffleDeck(createDeck()), 3))
+        state.communityCards.push(...dealCards(state.deck, 3))
         break
       case GamePhase.Flop:
         state.phase = GamePhase.Turn
-        state.communityCards.push(dealCards(shuffleDeck(createDeck()), 1)[0])
+        state.communityCards.push(dealCards(state.deck, 1)[0])
         break
       case GamePhase.Turn:
         state.phase = GamePhase.River
-        state.communityCards.push(dealCards(shuffleDeck(createDeck()), 1)[0])
+        state.communityCards.push(dealCards(state.deck, 1)[0])
         break
       case GamePhase.River:
         endHand(state); return
@@ -173,31 +198,56 @@ function advanceGame(state: GameState) {
 
 function runOutBoard(state: GameState) {
   const needed = 5 - state.communityCards.length
-  if (needed > 0) state.communityCards.push(...dealCards(shuffleDeck(createDeck()), needed))
+  if (needed > 0) state.communityCards.push(...dealCards(state.deck, needed))
 }
 
 function endHand(state: GameState) {
   state.phase = GamePhase.Showdown
   const nonFolded = state.players.filter(p => !p.folded)
 
+  // Add current street bets to pot, then accumulate into totalBet for side pot calculation
+  state.pot += state.players.reduce((s, p) => s + p.bet, 0)
+  for (const p of state.players) { p.totalBet += p.bet; p.bet = 0 }
+
+  // Build showdown info
+  const showdownInfos: ShowdownInfo[] = []
+  for (const p of nonFolded) {
+    if (p.holeCards[0] && p.holeCards[1]) {
+      const { result, cards } = bestHandWithCards(p.holeCards as Card[], state.communityCards)
+      showdownInfos.push({
+        playerId: p.id, playerName: p.name,
+        holeCards: [cardToString(p.holeCards[0]!), cardToString(p.holeCards[1]!)],
+        cards: cards.map(c => cardToString(c)),
+        handName: HAND_NAMES[result.rank], handRank: result.rank,
+      })
+    }
+  }
+  state.showdown = showdownInfos
+
+  // All-fold case: single player scoops the pot
   if (nonFolded.length === 1) {
-    const total = state.players.reduce((s, p) => s + p.bet, 0)
-    nonFolded[0].chips += total; state.pot = total
+    nonFolded[0].chips += state.pot
+    const sd = showdownInfos[0]
     state.winners = [{
       playerId: nonFolded[0].id, playerName: nonFolded[0].name,
-      amount: total, handRank: 0, handName: '全弃获胜',
+      amount: state.pot, handRank: sd?.handRank ?? 0, handName: '全弃获胜',
+      cards: sd?.cards ?? [],
     }]
     return
   }
 
+  // Evaluate hands
   const results = nonFolded.map(p => ({
-    player: p, result: bestHand(p.holeCards as Card[], state.communityCards),
+    player: p,
+    result: bestHand(p.holeCards as Card[], state.communityCards),
   }))
+
+  // Calculate side pots using totalBet (total contribution per player)
   const { sidePots } = calculatePots(state.players)
   const winners: WinnerInfo[] = []
   const pots = sidePots.length > 0
     ? sidePots
-    : [{ amount: state.players.reduce((s, p) => s + p.bet, 0), eligiblePlayerIds: nonFolded.map(p => p.id) }]
+    : [{ amount: state.players.reduce((s, p) => s + p.totalBet, 0), eligiblePlayerIds: nonFolded.map(p => p.id) }]
 
   for (const pot of pots) {
     if (pot.amount === 0) continue
@@ -213,29 +263,30 @@ function endHand(state: GameState) {
 
     for (const r of tied) {
       r.player.chips += split
+      const sd = showdownInfos.find(s => s.playerId === r.player.id)
       const existing = winners.find(w => w.playerId === r.player.id)
       if (existing) existing.amount += split
       else winners.push({
         playerId: r.player.id, playerName: r.player.name,
         amount: split, handRank: r.result.rank, handName: HAND_NAMES[r.result.rank],
+        cards: sd?.cards ?? [],
       })
     }
     tied[0].player.chips += rem
     winners.find(w => w.playerId === tied[0].player.id)!.amount += rem
   }
 
-  state.pot = state.players.reduce((s, p) => s + p.bet, 0)
   state.winners = winners
 }
 
 export function resetForNextHand(state: GameState) {
   state.phase = GamePhase.Waiting; state.communityCards = []
-  state.currentBet = 0; state.sidePots = []; state.pot = 0; state.winners = null
-  for (const p of state.players) { p.bet = 0; p.folded = false; p.allIn = false }
-  state.players = state.players.filter(p => p.chips > 0)
+  state.currentBet = 0; state.sidePots = []; state.pot = 0
+  state.winners = null; state.showdown = null
+  state.actedMask = 0
+  for (const p of state.players) {
+    p.bet = 0; p.totalBet = 0
+    if (p.chips > 0) { p.folded = false; p.allIn = false }
+  }
 }
 
-export function playerRebuy(state: GameState, playerId: string) {
-  const p = state.players.find(x => x.id === playerId)
-  if (p) p.chips += state.initialChips
-}

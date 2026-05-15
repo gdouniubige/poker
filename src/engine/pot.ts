@@ -2,14 +2,14 @@ import type { PlayerState, SidePot } from './types'
 
 export interface PotResult { totalPot: number; sidePots: SidePot[] }
 
-/** Calculate main pot and side pots from player bets */
+/** Calculate main pot and side pots from player bets (includes folded players' contributions) */
 export function calculatePots(players: PlayerState[]): PotResult {
-  const active = players.filter(p => !p.folded)
-  if (active.length === 0) return { totalPot: 0, sidePots: [] }
-
-  const entries = active
-    .map(p => ({ id: p.id, bet: p.bet }))
+  const entries = players
+    .filter(p => p.totalBet > 0)
+    .map(p => ({ id: p.id, bet: p.totalBet }))
     .sort((a, b) => a.bet - b.bet)
+
+  if (entries.length === 0) return { totalPot: 0, sidePots: [] }
 
   const sidePots: SidePot[] = []
   let previousLevel = 0

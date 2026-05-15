@@ -12,7 +12,11 @@
       "Bash(gh auth *)",
       "Bash(git add *)",
       "Bash(git reset *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(powershell -Command \"Test-NetConnection -ComputerName github.com -Port 443 -WarningAction SilentlyContinue | Select-Object -Property TcpTestSucceeded\")",
+      "Bash(powershell *)"
     ]
   }
 }

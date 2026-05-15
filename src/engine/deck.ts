@@ -31,13 +31,13 @@ export function dealCards(deck: Card[], count: number): Card[] {
 }
 
 export function cardToString(card: Card): string {
-  const suitSymbol: Record<Suit, string> = {
-    [Suit.Spades]: '♠', [Suit.Hearts]: '♥',
-    [Suit.Diamonds]: '♦', [Suit.Clubs]: '♣',
+  const suitCode: Record<Suit, string> = {
+    [Suit.Spades]: 's', [Suit.Hearts]: 'h',
+    [Suit.Diamonds]: 'd', [Suit.Clubs]: 'c',
   }
   const rankChar: Record<number, string> = {
     2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',
     11:'J',12:'Q',13:'K',14:'A',
   }
-  return `${rankChar[card.rank]}${suitSymbol[card.suit]}`
+  return `${rankChar[card.rank]}${suitCode[card.suit]}`
 }

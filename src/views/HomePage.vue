@@ -6,17 +6,26 @@
     <div class="actions">
       <button class="btn primary" @click="showCreate = true">创建房间</button>
       <div class="join-row">
-        <input v-model="joinCode" placeholder="房间码" maxlength="6" class="input" />
+        <input v-model="joinCode" placeholder="房间码" maxlength="3" inputmode="numeric" class="input" />
         <button class="btn secondary" @click="showJoin = true" :disabled="!joinCode">加入房间</button>
       </div>
     </div>
 
     <p v-if="store.error" class="error">{{ store.error }}</p>
 
+    <div class="warnings">
+      <p class="warn">严厉打击赌博违法犯罪活动</p>
+      <p class="warn">远离赌博，珍爱家庭</p>
+    </div>
+
     <div v-if="showCreate" class="modal-overlay" @click.self="showCreate = false">
       <div class="modal">
         <h3>创建房间</h3>
         <input v-model="createName" placeholder="你的昵称" maxlength="8" class="input" />
+        <div class="chips-row">
+          <span class="chips-label">初始筹码</span>
+          <input v-model.number="createChips" type="number" min="100" max="10000" step="100" class="input chips-input" />
+        </div>
         <button class="btn primary" @click="doCreate" :disabled="!createName">确定</button>
         <button class="btn cancel" @click="showCreate = false">取消</button>
       </div>
@@ -43,15 +52,16 @@ const store = useGameStore()
 const showCreate = ref(false)
 const showJoin = ref(false)
 const createName = ref('')
+const createChips = ref(100)
 const joinName = ref('')
 const joinCode = ref('')
 
-function genCode() { return Math.random().toString(36).slice(2, 8).toUpperCase() }
+function genCode() { return String(Math.floor(100 + Math.random() * 900)) }
 
 async function doCreate() {
   store.error = ''
   try {
-    await store.createRoom(createName.value, genCode())
+    await store.createRoom(createName.value, genCode(), createChips.value)
     router.push('/lobby')
   } catch (e: any) {
     store.error = e.message || '创建失败'
@@ -61,7 +71,7 @@ async function doCreate() {
 async function doJoin() {
   store.error = ''
   try {
-    await store.joinRoom(joinName.value, joinCode.value.toUpperCase())
+    await store.joinRoom(joinName.value, joinCode.value)
     router.push('/lobby')
   } catch (e: any) {
     store.error = e.message || '加入失败'
@@ -85,5 +95,10 @@ async function doJoin() {
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .modal { background: #263238; padding: 24px; border-radius: 12px; display: flex; flex-direction: column; gap: 12px; width: 280px; align-items: center; }
 .modal h3 { font-size: 18px; }
+.warnings { margin-top: 24px; text-align: center; }
+.warn { font-size: 15px; font-weight: 700; color: #e53935; letter-spacing: 2px; line-height: 2; }
 .modal .input { width: 100%; }
+.chips-row { display: flex; align-items: center; gap: 8px; width: 100%; }
+.chips-label { font-size: 14px; color: #aaa; white-space: nowrap; }
+.chips-input { width: 100px !important; flex: none; }
 </style>

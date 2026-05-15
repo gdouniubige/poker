@@ -51,14 +51,20 @@ export function compareHands(a: HandResult, b: HandResult): number {
 
 /** Find best 5-card hand from hole cards + community cards (up to 7). */
 export function bestHand(holeCards: Card[], communityCards: Card[]): HandResult {
+  return bestHandWithCards(holeCards, communityCards).result
+}
+
+/** Like bestHand but also returns the 5 best cards. */
+export function bestHandWithCards(holeCards: Card[], communityCards: Card[]): { result: HandResult; cards: Card[] } {
   const all = [...holeCards, ...communityCards]
   let best: HandResult = { rank: HandRank.HighCard, kickers: [] }
+  let bestCards: Card[] = all.slice(0, 5)
 
   function combine(start: number, excluded: number[]) {
     if (excluded.length === all.length - 5) {
       const combo = all.filter((_, i) => !excluded.includes(i))
       const res = evaluateFive(combo)
-      if (compareHands(res, best) > 0) best = res
+      if (compareHands(res, best) > 0) { best = res; bestCards = combo }
       return
     }
     for (let i = start; i < all.length; i++) {
@@ -66,5 +72,5 @@ export function bestHand(holeCards: Card[], communityCards: Card[]): HandResult 
     }
   }
   combine(0, [])
-  return best
+  return { result: best, cards: bestCards }
 }

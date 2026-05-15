@@ -9,7 +9,6 @@ export type HostMessage =
 export type ClientMessage =
   | { type: 'join'; name: string }
   | { type: 'action'; action: PlayerAction }
-  | { type: 'rebuy' }
   | { type: 'leave' }
   | { type: 'start_game' }
 
@@ -19,9 +18,11 @@ export interface SerializedGameState {
   communityCards: string[]; pot: number
   sidePots: { amount: number; eligiblePlayerIds: string[] }[]
   currentPlayerIndex: number; dealerIndex: number
-  smallBlind: number; bigBlind: number; currentBet: number
+  sbIndex: number; bbIndex: number
+  smallBlind: number; bigBlind: number; currentBet: number; minRaise: number
   initialChips: number; roundCount: number
-  winners: { playerId: string; playerName: string; amount: number; handRank: number; handName: string }[] | null
+  winners: { playerId: string; playerName: string; amount: number; handRank: number; handName: string; cards: string[] }[] | null
+  showdown: { playerId: string; playerName: string; holeCards: [string, string]; cards: string[]; handName: string; handRank: number }[] | null
   yourCards?: [string, string]; yourId?: string
 }
 
@@ -35,9 +36,11 @@ export function serializeGameState(state: GameState, forPlayerId?: string): Seri
     communityCards: state.communityCards.map(c => cardToString(c)),
     pot: state.pot, sidePots: state.sidePots,
     currentPlayerIndex: state.currentPlayerIndex, dealerIndex: state.dealerIndex,
+    sbIndex: state.sbIndex, bbIndex: state.bbIndex,
     smallBlind: state.smallBlind, bigBlind: state.bigBlind,
-    currentBet: state.currentBet, initialChips: state.initialChips,
-    roundCount: state.roundCount, winners: state.winners,
+    currentBet: state.currentBet, minRaise: state.minRaise,
+    initialChips: state.initialChips,
+    roundCount: state.roundCount, winners: state.winners, showdown: state.showdown,
     yourCards: forPlayerId ? (() => {
       const you = state.players.find(p => p.id === forPlayerId)
       if (!you || !you.holeCards[0]) return undefined
