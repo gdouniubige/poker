@@ -31,6 +31,7 @@ export const useGameStore = defineStore('game', () => {
   const connected = ref(false)
   const showResult = ref(false)
   const gameOver = ref<{ name: string; chips: number } | null>(null)
+  const readyPlayerIds = ref<string[]>([])
 
   let host: GameHost | null = null
   let client: GameClient | null = null
@@ -59,6 +60,21 @@ export const useGameStore = defineStore('game', () => {
     return Math.min(gameState.value.currentBet - myPlayer.value.bet, myPlayer.value.chips)
   })
 
+  const isReady = computed(() => {
+    const myId = role.value === 'host' ? 'host-self' : client?.playerId ?? ''
+    return readyPlayerIds.value.includes(myId)
+  })
+
+  const alivePlayers = computed(() => {
+    if (!gameState.value) return []
+    return gameState.value.players.filter(p => p.chips > 0)
+  })
+
+  const allAliveReady = computed(() => {
+    if (alivePlayers.value.length === 0) return false
+    return alivePlayers.value.every(p => readyPlayerIds.value.includes(p.id))
+  })
+
   async function createRoom(name: string, code: string, initialChips: number) {
     role.value = 'host'; playerName.value = name; roomCode.value = code
     host = new GameHost()
@@ -69,12 +85,18 @@ export const useGameStore = defineStore('game', () => {
       },
       onGameStateChange(state: any) {
         gameState.value = serializeGameState(state, 'host-self')
-        if (state.winners) showResult.value = true
+        if (state.winners) {
+          showResult.value = true
+        } else {
+          showResult.value = false
+          readyPlayerIds.value = []
+        }
       },
       onGameOver(winner: { id: string; name: string; chips: number }) {
         gameOver.value = { name: winner.name, chips: winner.chips }
         showResult.value = true
       },
+      onReadyUpdate(ids: string[]) { readyPlayerIds.value = ids },
     })
     saveSession({ role: 'host', roomCode: code, playerName: name, initialChips })
     window.addEventListener('beforeunload', () => cleanup())
@@ -91,10 +113,16 @@ export const useGameStore = defineStore('game', () => {
       onGameState(state: SerializedGameState) {
         gameState.value = state
         connected.value = true; error.value = ''
-        if (state.winners) showResult.value = true
+        if (state.winners) {
+          showResult.value = true
+        } else {
+          showResult.value = false
+          readyPlayerIds.value = []
+        }
       },
       onError(msg: string) { error.value = msg },
       onReconnecting() { connected.value = false; error.value = '重连中...' },
+      onReadyUpdate(ids: string[]) { readyPlayerIds.value = ids },
     })
     saveSession({ role: 'client', roomCode: code, playerName: name })
     window.addEventListener('beforeunload', () => cleanup())
@@ -128,9 +156,15 @@ export const useGameStore = defineStore('game', () => {
     else client?.sendAction(action)
   }
 
+  function sendReady() {
+    if (host) host.hostReady()
+    else client?.sendReady()
+  }
+
   function nextHand() {
     showResult.value = false
     gameOver.value = null
+    readyPlayerIds.value = []
     if (host) host.hostNextHand()
   }
 
@@ -141,14 +175,15 @@ export const useGameStore = defineStore('game', () => {
     host = null; client = null
     role.value = 'none'; gameState.value = null
     lobbyPlayers.value = []; connected.value = false; showResult.value = false
-    gameOver.value = null
+    gameOver.value = null; readyPlayerIds.value = []
     clearSession()
   }
 
   return {
     role, roomCode, playerName, gameState, lobbyPlayers, error, connected,
-    showResult, gameOver, isMyTurn, myPlayer, canCheck, callAmount,
+    showResult, gameOver, readyPlayerIds, isReady, alivePlayers, allAliveReady,
+    isMyTurn, myPlayer, canCheck, callAmount,
     createRoom, joinRoom, restoreSession, startGame, performAction,
-    nextHand, dismissResult, cleanup,
+    sendReady, nextHand, dismissResult, cleanup,
   }
 })

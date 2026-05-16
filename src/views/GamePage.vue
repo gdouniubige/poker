@@ -71,6 +71,7 @@
             <div v-for="sd in store.gameState.showdown" :key="sd.playerId" class="showdown-player" :class="{ winner: isWinner(sd.playerId) }">
               <div class="sp-top">
                 <span class="sp-name">{{ sd.playerName }}</span>
+                <span class="sp-ready">{{ isPlayerReady(sd.playerId) ? '✓已准备' : isPlayerAlive(sd.playerId) ? '等待中' : '' }}</span>
                 <div class="sp-hole">
                   <PokerCard v-for="(c, ci) in sd.holeCards" :key="'h'+ci" :card="c" small />
                 </div>
@@ -91,8 +92,11 @@
         </div>
 
         <div class="result-footer">
-          <button v-if="store.role === 'host'" class="btn next" @click="store.nextHand()">下一局</button>
-          <p v-else class="auto-text">等待房主开始下一局</p>
+          <template v-if="store.myPlayer && store.myPlayer.chips > 0">
+            <button v-if="!store.isReady" class="btn ready" @click="store.sendReady()">准备</button>
+            <p v-else class="auto-text">已准备，等待其他玩家...</p>
+          </template>
+          <p v-else class="auto-text">已淘汰，观战中...</p>
         </div>
       </div>
     </div>
@@ -158,6 +162,14 @@ function getPlayerIndex(id: string): number {
 
 function isWinner(playerId: string): boolean {
   return store.gameState?.winners?.some(w => w.playerId === playerId) ?? false
+}
+
+function isPlayerReady(playerId: string): boolean {
+  return store.readyPlayerIds.includes(playerId)
+}
+
+function isPlayerAlive(playerId: string): boolean {
+  return (store.gameState?.players.find(p => p.id === playerId)?.chips ?? 0) > 0
 }
 
 // ─── Sound effects ───
@@ -249,6 +261,8 @@ watch(() => store.gameState?.phase, (p) => {
 .wn { font-weight: 600; }
 .wa { color: #4caf50; font-weight: 600; }
 .btn.next { padding: 12px; border-radius: 8px; background: #4caf50; color: #fff; font-weight: 600; font-size: 16px; width: 100%; }
+.btn.ready { padding: 12px; border-radius: 8px; background: #2196f3; color: #fff; font-weight: 600; font-size: 16px; width: 100%; }
+.sp-ready { font-size: 11px; color: #81c784; flex-shrink: 0; min-width: 52px; text-align: right; }
 .auto-text { color: #aaa; font-size: 13px; }
 .champion { font-size: 18px; font-weight: 600; }
 .champion-chips { font-size: 24px; color: #ffd54f; font-weight: bold; }

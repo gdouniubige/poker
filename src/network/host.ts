@@ -12,12 +12,14 @@ export interface HostCallbacks {
   onLobbyUpdate: (players: { id: string; name: string; chips: number }[]) => void
   onGameStateChange: (state: any) => void
   onGameOver: (winner: { id: string; name: string; chips: number }) => void
+  onReadyUpdate?: (readyPlayerIds: string[]) => void
 }
 
 export class GameHost {
   private peer!: Peer
   private conns = new Map<string, DataConnection>()
   private cb!: HostCallbacks
+  private readyPlayers = new Set<string>()
   gameState: any
 
   createRoom(roomCode: string, hostName: string, initialChips: number, callbacks: HostCallbacks): Promise<void> {
@@ -36,7 +38,14 @@ export class GameHost {
         if (conn.open) onOpen(); else conn.on('open', onOpen)
         conn.on('close', () => {
           const pid = [...this.conns.entries()].find(([, c]) => c === conn)?.[0]
-          if (pid) { this.conns.delete(pid); removePlayer(this.gameState, pid); this.emitLobby() }
+          if (pid) {
+            this.conns.delete(pid); this.readyPlayers.delete(pid); removePlayer(this.gameState, pid)
+            if (this.gameState.phase === 'waiting') {
+              this.emitLobby()
+            } else {
+              this.broadcastReady(); this.checkAllReady()
+            }
+          }
         })
       })
     })
@@ -71,7 +80,11 @@ export class GameHost {
         this.broadcastGameState(); this.cb.onGameStateChange(this.gameState); break
       }
       case 'leave': {
-        this.conns.delete(pid); removePlayer(this.gameState, pid); conn.close(); this.emitLobby(); break
+        this.conns.delete(pid); this.readyPlayers.delete(pid)
+        removePlayer(this.gameState, pid); conn.close(); this.emitLobby(); break
+      }
+      case 'ready': {
+        this.readyPlayers.add(pid); this.broadcastReady(); this.checkAllReady(); break
       }
     }
   }
@@ -84,7 +97,24 @@ export class GameHost {
 
   hostStartGame(): boolean {
     if (!startHand(this.gameState)) return false
+    this.readyPlayers.clear()
     this.broadcastGameState(); this.cb.onGameStateChange(this.gameState); return true
+  }
+
+  hostReady() {
+    this.readyPlayers.add('host-self')
+    this.broadcastReady()
+    this.checkAllReady()
+  }
+
+  private checkAllReady() {
+    const aliveIds = this.gameState.players
+      .filter((p: any) => p.chips > 0)
+      .map((p: any) => p.id)
+    if (aliveIds.every((id: string) => this.readyPlayers.has(id))) {
+      this.readyPlayers.clear()
+      this.hostNextHand()
+    }
   }
 
   /** Auto-start next hand, or go back to lobby if not enough players */
@@ -107,6 +137,14 @@ export class GameHost {
     for (const [pid, conn] of this.conns) {
       conn.send({ type: 'game_state', state: serializeGameState(this.gameState, pid) } as HostMessage)
     }
+  }
+
+  private broadcastReady() {
+    const ids = [...this.readyPlayers]
+    for (const conn of this.conns.values()) {
+      conn.send({ type: 'ready_update', readyPlayerIds: ids } as HostMessage)
+    }
+    this.cb.onReadyUpdate?.(ids)
   }
 
   private emitLobby() {

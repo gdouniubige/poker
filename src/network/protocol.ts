@@ -4,6 +4,7 @@ import { cardToString } from '../engine/deck'
 export type HostMessage =
   | { type: 'lobby_update'; players: { id: string; name: string; chips: number }[] }
   | { type: 'game_state'; state: SerializedGameState }
+  | { type: 'ready_update'; readyPlayerIds: string[] }
   | { type: 'error'; message: string }
 
 export type ClientMessage =
@@ -11,6 +12,7 @@ export type ClientMessage =
   | { type: 'action'; action: PlayerAction }
   | { type: 'leave' }
   | { type: 'start_game' }
+  | { type: 'ready' }
 
 export interface SerializedGameState {
   phase: string

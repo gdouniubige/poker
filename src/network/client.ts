@@ -7,6 +7,7 @@ export interface ClientCallbacks {
   onGameState: (state: SerializedGameState) => void
   onError: (msg: string) => void
   onReconnecting: () => void
+  onReadyUpdate?: (readyPlayerIds: string[]) => void
 }
 
 export class GameClient {
@@ -46,6 +47,7 @@ export class GameClient {
       switch (msg.type) {
         case 'lobby_update': this.cb.onLobbyUpdate(msg.players); resolve?.(); break
         case 'game_state': this.cb.onGameState(msg.state); resolve?.(); break
+        case 'ready_update': this.cb.onReadyUpdate?.(msg.readyPlayerIds); break
         case 'error': this.cb.onError(msg.message); break
       }
     })
@@ -75,6 +77,7 @@ export class GameClient {
   send(msg: ClientMessage) { if (this.conn?.open) this.conn.send(msg) }
   sendAction(action: PlayerAction) { this.send({ type: 'action', action }) }
   requestStart() { this.send({ type: 'start_game' }) }
+  sendReady() { this.send({ type: 'ready' }) }
 
   leave() { this.send({ type: 'leave' }); this.conn?.close(); this.peer?.destroy() }
   destroy() { this.leave() }
